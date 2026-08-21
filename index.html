@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>マエダ Alert</title>
+
+<!-- ホーム画面アイコン（ロゴ）。同じフォルダの icon.png を使う -->
+<link rel="icon" href="icon.png">
+<link rel="apple-touch-icon" href="icon.png">
+
+<!-- スマホでアプリのように全画面表示する設定 -->
+<meta name="theme-color" content="#f7b500">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="マエダ Alert">
+
+<style>
+  html, body { margin:0; padding:0; height:100%; background:#fff7e0; }
+  iframe { border:0; width:100%; height:100%; display:block; }
+</style>
+</head>
+<body>
+  <!-- マエダ Alert 本体（Google Apps Script）を全画面で表示。?u=個人キー は本体へそのまま引き継ぐ -->
+  <iframe id="app" allow="geolocation; clipboard-write" title="マエダ Alert"></iframe>
+  <script>
+    var GAS = 'https://script.google.com/macros/s/AKfycbwAt4xgxvFWBBYKj40G4EDq1wgG7fAdC7kmnjDAAvnskC9pfAHeJ0APDJe1E2790Ij3/exec';
+    document.getElementById('app').src = GAS + (location.search || '');
+  </script>
+</body>
+</html>

@@ -84,7 +84,8 @@
     window.addEventListener('message', function (ev) {
       var d = ev.data || {};
       if (!d || !d.maedaPush) return;
-      var app = document.getElementById('app').contentWindow;
+      // 返事は「訊いてきた枠」へ（本体はGoogleのラッパー枠の中の孫にあたるため、子宛てでは届かない）
+      var app = ev.source || document.getElementById('app').contentWindow;
       if (d.maedaPush === 'query') { app.postMessage(pushStatusMsg(), '*'); return; }
       if (d.maedaPush === 'subscribe') {
         if (!pushSupported()) { app.postMessage({ maedaPush: 'error', reason: 'unsupported' }, '*'); return; }

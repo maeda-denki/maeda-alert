@@ -36,8 +36,15 @@
     var LIFF_ID = '2011265297-cgdkzrS4';
 
     // ▼ 直通知（Phase B）。★下の2つを貼ると有効になる（空のあいだは静かに無効＝従来どおり）
-    var FB_CONFIG = null;   // ★Firebaseの firebaseConfig をそのまま貼る（公開情報）
-    var VAPID_KEY = '';     // ★Cloud Messaging「ウェブプッシュ証明書」の公開鍵
+    var FB_CONFIG = {
+      apiKey: "AIzaSyDYj-b1qg_VBM2CsElt7gKnfnEAz-dni2o",
+      authDomain: "maeda-alert.firebaseapp.com",
+      projectId: "maeda-alert",
+      storageBucket: "maeda-alert.firebasestorage.app",
+      messagingSenderId: "1077728788153",
+      appId: "1:1077728788153:web:d411a7757f143ba5dca568"
+    };
+    var VAPID_KEY = 'BGXw3IT_T6Z2nz1Qs8l6tIhAVtiN6K3NM8Eknc_jbw1VzAu1F23FhHsCelXdVR2QtOtzhqXanc5nL7R_lFhKj_c';
 
     function boot(extra) {
       var qs = location.search || '';

@@ -96,7 +96,7 @@
                 (!isIOS || standalone));   // iPhoneはホーム画面のアプリとして開いたときだけ
     }
     if (FB_CONFIG && 'serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./firebase-messaging-sw.js').then(function (r) { swReg = r; }).catch(function () {});
+      navigator.serviceWorker.register('./firebase-messaging-sw.js?v=2', { updateViaCache: 'none' }).then(function (r) { swReg = r; }).catch(function () {});
       try { firebase.initializeApp(FB_CONFIG); fbMessaging = firebase.messaging(); } catch (e) {}
     }
     function pushStatusMsg() {
@@ -111,7 +111,7 @@
       setTimeout(function () { send({ maedaPush: 'error', reason: 'timeout' }); }, 25000);
       // 起動時の登録が失敗していても、ここでもう一度登録し直す（.readyは失敗時に永久に待つため使わない）
       var ready = swReg ? Promise.resolve(swReg)
-                        : navigator.serviceWorker.register('./firebase-messaging-sw.js');
+                        : navigator.serviceWorker.register('./firebase-messaging-sw.js?v=2', { updateViaCache: 'none' });
       ready.then(function (reg) {
         swReg = reg; stage = '宛先の発行';
         if (!fbMessaging) { firebase.initializeApp(FB_CONFIG); fbMessaging = firebase.messaging(); }

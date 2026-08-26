@@ -1,8 +1,10 @@
 /* マエダ Alert ── 通知の受け口（Service Worker・Phase B）
    アプリを閉じていても、ここが通知を受け取って表示する。
    ★FB_CONFIG に Firebase の firebaseConfig を貼ると有効になる（空のあいだは何もしない） */
-importScripts('https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js');
-importScripts('https://www.gstatic.com/firebasejs/10.12.5/firebase-messaging-compat.js');
+/* 部品のURLに ?sw=1 を付けて、ページ本体とキャッシュを相乗りさせない
+   （iOSは相乗りすると「CORS-cross-origin」と誤判定して登録に失敗することがある） */
+importScripts('https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js?sw=1');
+importScripts('https://www.gstatic.com/firebasejs/10.12.5/firebase-messaging-compat.js?sw=1');
 
 var FB_CONFIG = {
       apiKey: "AIzaSyDYj-b1qg_VBM2CsElt7gKnfnEAz-dni2o",

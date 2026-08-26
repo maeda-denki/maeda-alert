@@ -1,22 +1,41 @@
 /* マエダ Alert ── 通知の受け口（Service Worker・Phase B）
-   アプリを閉じていても、ここが通知を受け取って表示する。
-   ★FB_CONFIG に Firebase の firebaseConfig を貼ると有効になる（空のあいだは何もしない） */
-/* 部品は同じドメイン（このリポジトリ内のコピー）から読む。
-   iOS(Safari)はService Worker内の他ドメインimportScriptsに厳しいCORS検査をかけ、
-   gstatic直読みだと「CORS-cross-origin」で登録に失敗するため（2026-08-26根治） */
-importScripts('./fb-app-compat.js');
-importScripts('./fb-messaging-compat.js');
+   アプリを閉じていても、ここが通知を受け取って表示し、タップでアプリを開く。
+   ▼2026-08-26 自前実装に全面書き換え（依存ゼロ）
+     理由：Firebase v10のcompat部品は中でwindowを参照しており、Service Workerでは
+     評価した瞬間に落ちる（「CORS-cross-origin」等の誤表示の正体）。部品を読まなければ
+     この問題ごと消える。通知の表示とタップ処理は下の素のWeb Push APIで足りる。 */
 
-var FB_CONFIG = {
-      apiKey: "AIzaSyDYj-b1qg_VBM2CsElt7gKnfnEAz-dni2o",
-      authDomain: "maeda-alert.firebaseapp.com",
-      projectId: "maeda-alert",
-      storageBucket: "maeda-alert.firebasestorage.app",
-      messagingSenderId: "1077728788153",
-      appId: "1:1077728788153:web:d411a7757f143ba5dca568"
-    };
+self.addEventListener('install', function () { self.skipWaiting(); });
+self.addEventListener('activate', function (e) { e.waitUntil(self.clients.claim()); });
 
-if (FB_CONFIG) {
-  firebase.initializeApp(FB_CONFIG);
-  firebase.messaging();  // 通知の表示とタップ時のリンク（fcm_options.link）はSDKが処理する
-}
+// 通知が届いたら表示する（GAS側は notification{title,body} と data.link を入れて送る）
+self.addEventListener('push', function (e) {
+  var p = {};
+  try { p = e.data ? e.data.json() : {}; } catch (err) {}
+  var n = p.notification || {};
+  var d = p.data || {};
+  var title = n.title || d.title || 'マエダ Alert';
+  var opts = {
+    body: n.body || d.body || '',
+    icon: n.icon || './icon-192.png',
+    badge: './icon-192.png',
+    tag: 'maeda-alert',            // 同時多発時は最新1件にまとめる（音は毎回鳴る）
+    renotify: true,
+    data: { link: d.link || (p.fcmOptions && p.fcmOptions.link) || './' }
+  };
+  e.waitUntil(self.registration.showNotification(title, opts));
+});
+
+// 通知をタップ → 開いているアプリがあれば前面に、なければ開く
+self.addEventListener('notificationclick', function (e) {
+  e.notification.close();
+  var link = (e.notification.data && e.notification.data.link) || './';
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {
+      for (var i = 0; i < list.length; i++) {
+        if ('focus' in list[i]) { list[i].navigate && list[i].navigate(link); return list[i].focus(); }
+      }
+      if (self.clients.openWindow) return self.clients.openWindow(link);
+    })
+  );
+});

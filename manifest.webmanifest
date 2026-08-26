@@ -1,7 +1,6 @@
 {
   "name": "マエダ Alert",
   "short_name": "マエダAlert",
-  "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "background_color": "#fff7e0",

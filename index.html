@@ -8,6 +8,7 @@
 <!-- ホーム画面アイコン（ロゴ）。同じフォルダの icon.png を使う -->
 <link rel="icon" href="icon.png">
 <link rel="apple-touch-icon" href="icon.png">
+<link rel="manifest" href="manifest.webmanifest">
 
 <!-- スマホでアプリのように全画面表示する設定 -->
 <meta name="theme-color" content="#f7b500">
@@ -23,13 +24,20 @@
 
 <!-- LIFF（LINEの中で開いたとき、LINEに「誰か」を教えてもらう仕組み） -->
 <script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<!-- 直通知（Firebase Cloud Messaging）。設定が空のあいだは読み込むだけで何もしない -->
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.5/firebase-messaging-compat.js"></script>
 </head>
 <body>
   <!-- マエダ Alert 本体（Google Apps Script）を全画面で表示。URLの引数（?u= ?cast= など）は本体へそのまま引き継ぐ -->
   <iframe id="app" allow="geolocation; clipboard-write" title="マエダ Alert"></iframe>
   <script>
     var GAS = 'https://script.google.com/macros/s/AKfycbwAt4xgxvFWBBYKj40G4EDq1wgG7fAdC7kmnjDAAvnskC9pfAHeJ0APDJe1E2790Ij3/exec';
-    var LIFF_ID = '2011265297-cgdkzrS4';  // ★LIFFアプリのID（LINE Developersで作成後にここへ貼る。空のあいだは従来どおり動く）
+    var LIFF_ID = '2011265297-cgdkzrS4';
+
+    // ▼ 直通知（Phase B）。★下の2つを貼ると有効になる（空のあいだは静かに無効＝従来どおり）
+    var FB_CONFIG = null;   // ★Firebaseの firebaseConfig をそのまま貼る（公開情報）
+    var VAPID_KEY = '';     // ★Cloud Messaging「ウェブプッシュ証明書」の公開鍵
 
     function boot(extra) {
       var qs = location.search || '';
@@ -47,6 +55,45 @@
     } else {
       boot('');
     }
+
+    // ─── 直通知の受付（アプリ本体からの橋渡し）───
+    // 通知の許可と宛先（トークン）取得は、このページの持ち場（本体はGoogleのドメインのため不可）。
+    var swReg = null, fbMessaging = null;
+    var isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    var standalone = (navigator.standalone === true) ||
+                     (window.matchMedia && matchMedia('(display-mode: standalone)').matches);
+    function pushSupported() {
+      return !!(FB_CONFIG && VAPID_KEY && 'serviceWorker' in navigator && 'Notification' in window &&
+                (!isIOS || standalone));   // iPhoneはホーム画面のアプリとして開いたときだけ
+    }
+    if (FB_CONFIG && 'serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./firebase-messaging-sw.js').then(function (r) { swReg = r; }).catch(function () {});
+      try { firebase.initializeApp(FB_CONFIG); fbMessaging = firebase.messaging(); } catch (e) {}
+    }
+    function pushStatusMsg() {
+      return { maedaPush: 'status', supported: pushSupported(), ios: isIOS, standalone: standalone,
+               permission: ('Notification' in window) ? Notification.permission : 'unsupported' };
+    }
+    window.addEventListener('message', function (ev) {
+      var d = ev.data || {};
+      if (!d || !d.maedaPush) return;
+      var app = document.getElementById('app').contentWindow;
+      if (d.maedaPush === 'query') { app.postMessage(pushStatusMsg(), '*'); return; }
+      if (d.maedaPush === 'subscribe') {
+        if (!pushSupported()) { app.postMessage({ maedaPush: 'error', reason: 'unsupported' }, '*'); return; }
+        Notification.requestPermission().then(function (p) {
+          if (p !== 'granted') { app.postMessage({ maedaPush: 'error', reason: 'denied' }, '*'); return; }
+          var ready = swReg ? Promise.resolve(swReg) : navigator.serviceWorker.ready;
+          ready.then(function (reg) {
+            return fbMessaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
+          }).then(function (token) {
+            app.postMessage({ maedaPush: 'token', token: token || '' }, '*');
+          }).catch(function (e) {
+            app.postMessage({ maedaPush: 'error', reason: String(e && e.message || e).slice(0, 80) }, '*');
+          });
+        });
+      }
+    });
   </script>
 </body>
 </html>

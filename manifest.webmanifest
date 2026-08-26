@@ -1,0 +1,13 @@
+{
+  "name": "マエダ Alert",
+  "short_name": "マエダAlert",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#fff7e0",
+  "theme_color": "#f7b500",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}

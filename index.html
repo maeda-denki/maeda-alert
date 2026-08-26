@@ -20,13 +20,33 @@
   html, body { margin:0; padding:0; height:100%; background:#fff7e0; }
   iframe { border:0; width:100%; height:100%; display:block; }
 </style>
+
+<!-- LIFF（LINEの中で開いたとき、LINEに「誰か」を教えてもらう仕組み） -->
+<script charset="utf-8" src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 </head>
 <body>
-  <!-- マエダ Alert 本体（Google Apps Script）を全画面で表示。?u=個人キー は本体へそのまま引き継ぐ -->
+  <!-- マエダ Alert 本体（Google Apps Script）を全画面で表示。URLの引数（?u= ?cast= など）は本体へそのまま引き継ぐ -->
   <iframe id="app" allow="geolocation; clipboard-write" title="マエダ Alert"></iframe>
   <script>
     var GAS = 'https://script.google.com/macros/s/AKfycbwAt4xgxvFWBBYKj40G4EDq1wgG7fAdC7kmnjDAAvnskC9pfAHeJ0APDJe1E2790Ij3/exec';
-    document.getElementById('app').src = GAS + (location.search || '');
+    var LIFF_ID = '';  // ★LIFFアプリのID（LINE Developersで作成後にここへ貼る。空のあいだは従来どおり動く）
+
+    function boot(extra) {
+      var qs = location.search || '';
+      document.getElementById('app').src = GAS + qs + (extra ? ((qs ? '&' : '?') + extra) : '');
+    }
+
+    // LINEの中でLIFFとして開かれたときだけ、本人（LINEユーザーID）を本体へ渡す。
+    // それ以外（Safari・ホーム画面・LIFF未設定・失敗時）は従来どおり＝安全側。
+    if (LIFF_ID && window.liff) {
+      liff.init({ liffId: LIFF_ID }).then(function () {
+        var ctx = liff.getContext && liff.getContext();
+        var uid = (liff.isInClient() && ctx && ctx.userId) ? ctx.userId : '';
+        boot(uid ? ('luid=' + encodeURIComponent(uid)) : '');
+      }).catch(function () { boot(''); });
+    } else {
+      boot('');
+    }
   </script>
 </body>
 </html>

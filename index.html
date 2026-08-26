@@ -89,17 +89,30 @@
       if (d.maedaPush === 'query') { app.postMessage(pushStatusMsg(), '*'); return; }
       if (d.maedaPush === 'subscribe') {
         if (!pushSupported()) { app.postMessage({ maedaPush: 'error', reason: 'unsupported' }, '*'); return; }
-        Notification.requestPermission().then(function (p) {
-          if (p !== 'granted') { app.postMessage({ maedaPush: 'error', reason: 'denied' }, '*'); return; }
-          var ready = swReg ? Promise.resolve(swReg) : navigator.serviceWorker.ready;
-          ready.then(function (reg) {
-            return fbMessaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
-          }).then(function (token) {
-            app.postMessage({ maedaPush: 'token', token: token || '' }, '*');
-          }).catch(function (e) {
-            app.postMessage({ maedaPush: 'error', reason: String(e && e.message || e).slice(0, 80) }, '*');
+        // どの段階で失敗しても必ず返事を返す（返さないと本体が「設定中…」のまま止まる）
+        var done = false;
+        var send = function (msg) { if (done) return; done = true; app.postMessage(msg, '*'); };
+        var stage = '許可';
+        setTimeout(function () { send({ maedaPush: 'error', reason: 'timeout' }); }, 25000);
+        Promise.resolve()
+          .then(function () { return Notification.requestPermission(); })
+          .then(function (p) {
+            if (p !== 'granted') { send({ maedaPush: 'error', reason: 'denied' }); return null; }
+            stage = '裏方の準備';
+            // 起動時の登録が失敗していても、ここでもう一度登録し直す（.readyは失敗時に永久に待つため使わない）
+            var ready = swReg ? Promise.resolve(swReg)
+                              : navigator.serviceWorker.register('./firebase-messaging-sw.js');
+            return ready.then(function (reg) {
+              swReg = reg; stage = '宛先の発行';
+              if (!fbMessaging) { firebase.initializeApp(FB_CONFIG); fbMessaging = firebase.messaging(); }
+              return fbMessaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
+            }).then(function (token) {
+              send({ maedaPush: 'token', token: token || '' });
+            });
+          })
+          .catch(function (e) {
+            send({ maedaPush: 'error', reason: stage + 'で失敗: ' + String(e && e.message || e).slice(0, 100) });
           });
-        });
       }
     });
   </script>

@@ -20,6 +20,18 @@
 <style>
   html, body { margin:0; padding:0; height:100%; background:#fff7e0; }
   iframe { border:0; width:100%; height:100%; display:block; }
+  /* 通知許可のかぶせ画面（iOSは「押した本人のページ」でしか許可を求められないため、ここで一度押してもらう） */
+  #pushOv { position:fixed; inset:0; background:rgba(0,0,0,.45); display:none;
+            align-items:center; justify-content:center; z-index:99;
+            font-family:-apple-system, "Hiragino Sans", system-ui, sans-serif; }
+  #pushOv.on { display:flex; }
+  .pushOvCard { background:#fff; border-radius:16px; padding:22px 18px; width:min(320px, 86vw); text-align:center;
+                box-shadow:0 8px 30px rgba(0,0,0,.25); }
+  .pushOvCard h2 { margin:0 0 8px; font-size:17px; color:#333; }
+  .pushOvCard p { margin:0 0 16px; font-size:14px; color:#555; line-height:1.6; }
+  .pushOvCard .go { display:block; width:100%; padding:15px 8px; border:none; border-radius:12px;
+                    background:#f7b500; color:#3a2c00; font-size:16px; font-weight:700; }
+  .pushOvCard .quit { margin-top:12px; background:none; border:none; color:#888; font-size:13px; text-decoration:underline; }
 </style>
 
 <!-- LIFF（LINEの中で開いたとき、LINEに「誰か」を教えてもらう仕組み） -->
@@ -31,6 +43,16 @@
 <body>
   <!-- マエダ Alert 本体（Google Apps Script）を全画面で表示。URLの引数（?u= ?cast= など）は本体へそのまま引き継ぐ -->
   <iframe id="app" allow="geolocation; clipboard-write" title="マエダ Alert"></iframe>
+
+  <!-- 通知許可のかぶせ画面（ふだんは非表示） -->
+  <div id="pushOv">
+    <div class="pushOvCard">
+      <h2>🔔 アプリへの直通知</h2>
+      <p>次に出る画面で<br>「許可」を押してください</p>
+      <button type="button" class="go" id="pushOvGo">許可の画面を出す</button>
+      <button type="button" class="quit" id="pushOvQuit">やめる</button>
+    </div>
+  </div>
   <script>
     var GAS = 'https://script.google.com/macros/s/AKfycbwAt4xgxvFWBBYKj40G4EDq1wgG7fAdC7kmnjDAAvnskC9pfAHeJ0APDJe1E2790Ij3/exec';
     var LIFF_ID = '2011265297-cgdkzrS4';
@@ -81,6 +103,58 @@
       return { maedaPush: 'status', supported: pushSupported(), ios: isIOS, standalone: standalone,
                permission: ('Notification' in window) ? Notification.permission : 'unsupported' };
     }
+    // 宛先（トークン）の発行。どの段階で失敗しても必ず返事を返す（返さないと本体が「設定中…」のまま止まる）
+    function fetchPushToken_(app) {
+      var done = false;
+      var send = function (msg) { if (done) return; done = true; app.postMessage(msg, '*'); };
+      var stage = '裏方の準備';
+      setTimeout(function () { send({ maedaPush: 'error', reason: 'timeout' }); }, 25000);
+      // 起動時の登録が失敗していても、ここでもう一度登録し直す（.readyは失敗時に永久に待つため使わない）
+      var ready = swReg ? Promise.resolve(swReg)
+                        : navigator.serviceWorker.register('./firebase-messaging-sw.js');
+      ready.then(function (reg) {
+        swReg = reg; stage = '宛先の発行';
+        if (!fbMessaging) { firebase.initializeApp(FB_CONFIG); fbMessaging = firebase.messaging(); }
+        return fbMessaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
+      }).then(function (token) {
+        send({ maedaPush: 'token', token: token || '' });
+      }).catch(function (e) {
+        send({ maedaPush: 'error', reason: stage + 'で失敗: ' + String(e && e.message || e).slice(0, 100) });
+      });
+    }
+
+    // かぶせ画面：iOSは「押した本人のページ」でしか許可を求められない。
+    // タップは本体（Googleの枠の中）で起きるため、このページ自身のボタンを一度押してもらう。
+    var ovApp = null, ovTimer = null;
+    function hidePushOv_() {
+      document.getElementById('pushOv').classList.remove('on');
+      if (ovTimer) { clearTimeout(ovTimer); ovTimer = null; }
+      ovApp = null;
+    }
+    function showPushOv_(app) {
+      ovApp = app;
+      document.getElementById('pushOv').classList.add('on');
+      if (ovTimer) clearTimeout(ovTimer);
+      ovTimer = setTimeout(function () {
+        var a = ovApp; hidePushOv_();
+        if (a) a.postMessage({ maedaPush: 'error', reason: 'timeout' }, '*');
+      }, 50000);
+    }
+    document.getElementById('pushOvQuit').onclick = function () {
+      var a = ovApp; hidePushOv_();
+      if (a) a.postMessage({ maedaPush: 'error', reason: 'cancel' }, '*');
+    };
+    document.getElementById('pushOvGo').onclick = function () {
+      var a = ovApp; hidePushOv_();
+      if (!a) return;
+      Promise.resolve().then(function () { return Notification.requestPermission(); }).then(function (p) {
+        if (p !== 'granted') { a.postMessage({ maedaPush: 'error', reason: 'denied' }, '*'); return; }
+        fetchPushToken_(a);
+      }).catch(function (e) {
+        a.postMessage({ maedaPush: 'error', reason: '許可で失敗: ' + String(e && e.message || e).slice(0, 100) }, '*');
+      });
+    };
+
     window.addEventListener('message', function (ev) {
       var d = ev.data || {};
       if (!d || !d.maedaPush) return;
@@ -89,30 +163,9 @@
       if (d.maedaPush === 'query') { app.postMessage(pushStatusMsg(), '*'); return; }
       if (d.maedaPush === 'subscribe') {
         if (!pushSupported()) { app.postMessage({ maedaPush: 'error', reason: 'unsupported' }, '*'); return; }
-        // どの段階で失敗しても必ず返事を返す（返さないと本体が「設定中…」のまま止まる）
-        var done = false;
-        var send = function (msg) { if (done) return; done = true; app.postMessage(msg, '*'); };
-        var stage = '許可';
-        setTimeout(function () { send({ maedaPush: 'error', reason: 'timeout' }); }, 25000);
-        Promise.resolve()
-          .then(function () { return Notification.requestPermission(); })
-          .then(function (p) {
-            if (p !== 'granted') { send({ maedaPush: 'error', reason: 'denied' }); return null; }
-            stage = '裏方の準備';
-            // 起動時の登録が失敗していても、ここでもう一度登録し直す（.readyは失敗時に永久に待つため使わない）
-            var ready = swReg ? Promise.resolve(swReg)
-                              : navigator.serviceWorker.register('./firebase-messaging-sw.js');
-            return ready.then(function (reg) {
-              swReg = reg; stage = '宛先の発行';
-              if (!fbMessaging) { firebase.initializeApp(FB_CONFIG); fbMessaging = firebase.messaging(); }
-              return fbMessaging.getToken({ vapidKey: VAPID_KEY, serviceWorkerRegistration: reg });
-            }).then(function (token) {
-              send({ maedaPush: 'token', token: token || '' });
-            });
-          })
-          .catch(function (e) {
-            send({ maedaPush: 'error', reason: stage + 'で失敗: ' + String(e && e.message || e).slice(0, 100) });
-          });
+        if (Notification.permission === 'granted') { fetchPushToken_(app); return; }   // 許可済みなら即発行
+        if (Notification.permission === 'denied') { app.postMessage({ maedaPush: 'error', reason: 'denied' }, '*'); return; }
+        showPushOv_(app);
       }
     });
   </script>

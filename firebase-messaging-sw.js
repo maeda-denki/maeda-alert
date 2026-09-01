@@ -24,11 +24,14 @@ self.addEventListener('push', function (e) {
     data: { link: d.link || (p.fcmOptions && p.fcmOptions.link) || './' }
   };
   e.waitUntil(self.registration.showNotification(title, opts));
+  // ホーム画面アイコンに赤いバッジを付ける（未確認の印。アプリを開くと消える・iOS 16.4+）
+  try { if (navigator.setAppBadge) e.waitUntil(navigator.setAppBadge(1).catch(function () {})); } catch (err) {}
 });
 
 // 通知をタップ → 開いているアプリがあれば前面に、なければ開く
 self.addEventListener('notificationclick', function (e) {
   e.notification.close();
+  try { if (navigator.clearAppBadge) navigator.clearAppBadge().catch(function () {}); } catch (err) {}
   var link = (e.notification.data && e.notification.data.link) || './';
   e.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (list) {

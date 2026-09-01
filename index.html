@@ -56,7 +56,7 @@
   <script>
     var GAS = 'https://script.google.com/macros/s/AKfycbwAt4xgxvFWBBYKj40G4EDq1wgG7fAdC7kmnjDAAvnskC9pfAHeJ0APDJe1E2790Ij3/exec';
     var LIFF_ID = '2011265297-cgdkzrS4';
-    var PAGE_VER = '配布v7';   // エラー文言に載せて「どの版が動いているか」を見える化する
+    var PAGE_VER = '配布v8';   // エラー文言に載せて「どの版が動いているか」を見える化する
 
     // ▼ 直通知（Phase B）。★下の2つを貼ると有効になる（空のあいだは静かに無効＝従来どおり）
     var FB_CONFIG = {
@@ -73,6 +73,13 @@
       var qs = location.search || '';
       document.getElementById('app').src = GAS + qs + (extra ? ((qs ? '&' : '?') + extra) : '');
     }
+
+    // アプリを開いた・前面に戻したら、アイコンのバッジ（未確認の印）を消す
+    function clearBadge_() {
+      try { if (navigator.clearAppBadge) navigator.clearAppBadge().catch(function () {}); } catch (e) {}
+    }
+    clearBadge_();
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) clearBadge_(); });
 
     // LINEの中でLIFFとして開かれたときだけ、本人（LINEユーザーID）を本体へ渡す。
     // それ以外（Safari・ホーム画面・LIFF未設定・失敗時）は従来どおり＝安全側。
@@ -97,7 +104,7 @@
                 (!isIOS || standalone));   // iPhoneはホーム画面のアプリとして開いたときだけ
     }
     if (FB_CONFIG && 'serviceWorker' in navigator) {
-      navigator.serviceWorker.register('./firebase-messaging-sw.js?v=4', { updateViaCache: 'none' }).then(function (r) { swReg = r; }).catch(function () {});
+      navigator.serviceWorker.register('./firebase-messaging-sw.js?v=5', { updateViaCache: 'none' }).then(function (r) { swReg = r; }).catch(function () {});
       try { firebase.initializeApp(FB_CONFIG); fbMessaging = firebase.messaging(); } catch (e) {}
     }
     function pushStatusMsg() {
@@ -112,7 +119,7 @@
       setTimeout(function () { send({ maedaPush: 'error', reason: 'timeout' }); }, 25000);
       // 起動時の登録が失敗していても、ここでもう一度登録し直す（.readyは失敗時に永久に待つため使わない）
       var ready = swReg ? Promise.resolve(swReg)
-                        : navigator.serviceWorker.register('./firebase-messaging-sw.js?v=4', { updateViaCache: 'none' });
+                        : navigator.serviceWorker.register('./firebase-messaging-sw.js?v=5', { updateViaCache: 'none' });
       ready.then(function (reg) {
         swReg = reg; stage = '宛先の発行';
         if (!fbMessaging) { firebase.initializeApp(FB_CONFIG); fbMessaging = firebase.messaging(); }
